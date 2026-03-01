@@ -20,13 +20,14 @@ sample_rate = 16000
 model_size = "base"
 HOTKEY = {keyboard.Key.alt_l}
 
+#overlay 
 class _OverlayWindow(NSWindow):
     def canBecomeKeyWindow(self):
         return False
     def canBecomeMainWindow(self):
         return False
 
-
+#pillview(UI) 
 class _PillView(NSView):
 
     def initWithFrame_(self, frame):
@@ -87,7 +88,7 @@ class _PillView(NSView):
             NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.65).setFill()
             pill.fill()
 
-
+#pill-specs
 IDLE_W, IDLE_H = 32, 12
 ACTIVE_W, ACTIVE_H = 65, 25
 HUD_Y = 85
@@ -110,7 +111,7 @@ BELL = _make_bell(NUM_BARS)
 EDGE_ALPHA = _make_edge_alpha(NUM_BARS)
 SMOOTHING = _make_smoothing(NUM_BARS)
 
-
+#HUD(UI)
 class WaveformHUD(NSObject):
 
     @objc.python_method
@@ -229,7 +230,7 @@ class WaveformHUD(NSObject):
             self._view.amps[i] = self._view.amps[i] * (1 - s) + target * s
         self._view.setNeedsDisplay_(True)
 
-
+#record logic
 class AudioRecorder:
 
     def __init__(self, samplerate=sample_rate):
@@ -270,7 +271,7 @@ class AudioRecorder:
         return audio
 
 
-
+#transcribe logic
 class WhisperTranscriber:
 
     def __init__(self, modelsize=model_size):
@@ -290,6 +291,7 @@ class WhisperTranscriber:
         )
         return result["text"].strip()
 
+#application
 class HeyListen(rumps.App):
 
     def __init__(self):
@@ -368,7 +370,7 @@ class HeyListen(rumps.App):
         time.sleep(2)
         self.title = "HeyListen"
         
-
+#main
 if __name__ == "__main__":
     hl_application = HeyListen()
     hl_application.run()
