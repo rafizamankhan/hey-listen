@@ -2,6 +2,8 @@ import threading
 import subprocess 
 import time 
 import queue
+import math
+import random
 import objc
 import numpy as np 
 import sounddevice as sd 
@@ -30,8 +32,9 @@ class _PillView(NSView):
     def initWithFrame_(self, frame):
         self = objc.super(_PillView, self).initWithFrame_(frame)
         if self is not None:
-            self.amps = [0.0] * 10
+            self.amps = [0.0] * NUM_BARS
             self.active = False
+            self._transition_t = 0.0
         return self
 
     def isOpaque(self):
@@ -43,35 +46,57 @@ class _PillView(NSView):
         pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(bounds, h / 2, h / 2)
 
         if self.active:
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.8).setFill()
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.78).setFill()
             pill.fill()
-            margin = h * 0.5
+            margin = w * 0.15
             usable_w = w - 2 * margin
             bar_w = usable_w / len(self.amps)
-            gap = bar_w * 0.3
-            cap_w = bar_w - gap
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.9).setFill()
+            cap_w = max(bar_w * 0.40, 2)
+            bloom_pad = 1.0
+            center_idx = (len(self.amps) - 1) / 2
             for i, amp in enumerate(self.amps):
-                bar_h = max(amp * (h - 10), 3)
-                x = margin + i * bar_w + gap / 2
+                delay = abs(i - center_idx) / center_idx * 0.3
+                t = max(min((self._transition_t - delay) / (1.0 - delay), 1.0), 0.0)
+                bar_h = max(amp * h * 0.58 * t, 3.0 * t)
+                x = margin + i * bar_w + (bar_w - cap_w) / 2
                 y = (h - bar_h) / 2
-                r = min(cap_w, bar_h) / 2
+                r = cap_w / 2
+                a = EDGE_ALPHA[i]
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, a * 0.15).setFill()
+                NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                    ((x - bloom_pad, y - bloom_pad),
+                     (cap_w + bloom_pad * 2, bar_h + bloom_pad * 2)),
+                    r + bloom_pad, r + bloom_pad
+                ).fill()
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, a * 0.85).setFill()
                 NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
                     ((x, y), (cap_w, bar_h)), r, r
                 ).fill()
         else:
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.35).setFill()
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.65).setFill()
             pill.fill()
-            dot = 4
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.5).setFill()
-            NSBezierPath.bezierPathWithOvalInRect_(
-                (((w - dot) / 2, (h - dot) / 2), (dot, dot))
-            ).fill()
 
 
-IDLE_W, IDLE_H = 20, 12
-ACTIVE_W, ACTIVE_H = 60, 30
-HUD_Y = 90
+IDLE_W, IDLE_H = 32, 12
+ACTIVE_W, ACTIVE_H = 65, 25
+HUD_Y = 85
+NUM_BARS = 9
+
+def _make_bell(n):
+    center = (n - 1) / 2
+    return [math.exp(-0.5 * ((i - center) / (n / 3.5)) ** 2) for i in range(n)]
+
+def _make_edge_alpha(n):
+    center = (n - 1) / 2
+    return [0.25 + 0.75 * math.exp(-0.5 * ((i - center) / (n / 2.8)) ** 2) for i in range(n)]
+
+def _make_smoothing(n):
+    center = (n - 1) / 2
+    return [0.25 + 0.2 * abs(i - center) / center for i in range(n)]
+
+BELL = _make_bell(NUM_BARS)
+EDGE_ALPHA = _make_edge_alpha(NUM_BARS)
+SMOOTHING = _make_smoothing(NUM_BARS)
 
 
 class WaveformHUD(NSObject):
@@ -82,6 +107,7 @@ class WaveformHUD(NSObject):
         self._timer = None
         self._win = None
         self._view = None
+        self._phase = 0.0
         self.performSelector_withObject_afterDelay_('initWindow:', None, 0)
         return self
 
@@ -122,16 +148,22 @@ class WaveformHUD(NSObject):
         if self._timer:
             self._timer.invalidate()
             self._timer = None
+
         self._view.active = True
-        self._view.amps = [0.0] * 10
+        self._view.amps = [0.0] * NUM_BARS
+        self._view._transition_t = 0.0
         scr = NSScreen.mainScreen().frame()
         w, h = ACTIVE_W, ACTIVE_H
+
+        self._win.setAlphaValue_(0.4)
         self._win.setFrame_display_animate_(
             (((scr.size.width - w) / 2, HUD_Y), (w, h)), True, True
         )
+        self._win.setAlphaValue_(1.0)
         self._win.orderFront_(None)
+
         self._timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            0.05, self, 'tick:', None, True
+            0.033, self, 'tick:', None, True
         )
 
     @objc.python_method
@@ -144,12 +176,16 @@ class WaveformHUD(NSObject):
             self._timer = None
         if self._win is None:
             return
+
         self._view.active = False
         scr = NSScreen.mainScreen().frame()
         w, h = IDLE_W, IDLE_H
+
+        self._win.setAlphaValue_(0.85)
         self._win.setFrame_display_animate_(
             (((scr.size.width - w) / 2, HUD_Y), (w, h)), True, True
         )
+        self._win.setAlphaValue_(1.0)
         self._view.setNeedsDisplay_(True)
 
     @objc.python_method
@@ -157,11 +193,26 @@ class WaveformHUD(NSObject):
         self._queue.put(chunk)
 
     def tick_(self, timer):
+        if self._view._transition_t < 1.0:
+            self._view._transition_t = min(self._view._transition_t + 0.08, 1.0)
+        self._phase += 0.36
+
+        rms = 0.0
         while not self._queue.empty():
             chunk = self._queue.get_nowait()
-            rms = np.sqrt(np.mean(chunk ** 2))
-            self._view.amps.pop(0)
-            self._view.amps.append(min(rms * 10, 1.0))
+            rms = max(rms, np.sqrt(np.mean(chunk ** 2)))
+        rms = min(rms * 10, 1.0)
+
+        for i in range(NUM_BARS):
+            wave = 0.5 + 0.5 * math.sin(self._phase - i * 0.7)
+            idle_pulse = wave * 0.30
+
+            jitter = 0.7 + random.random() * 0.6
+            voice = rms * BELL[i] * jitter
+            target = max(voice, idle_pulse)
+
+            s = SMOOTHING[i]
+            self._view.amps[i] = self._view.amps[i] * (1 - s) + target * s
         self._view.setNeedsDisplay_(True)
 
 
