@@ -46,10 +46,21 @@ class _PillView(NSView):
         pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(bounds, h / 2, h / 2)
 
         if self.active:
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.78).setFill()
+            p = RING_PAD
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.12).setFill()
             pill.fill()
-            margin = w * 0.15
-            usable_w = w - 2 * margin
+
+            inner_bounds = ((p, p), (w - 2 * p, h - 2 * p))
+            inner_h = h - 2 * p
+            inner_w = w - 2 * p
+            inner_pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                inner_bounds, inner_h / 2, inner_h / 2
+            )
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(0, 0, 0, 0.99).setFill()
+            inner_pill.fill()
+
+            margin = inner_w * 0.15
+            usable_w = inner_w - 2 * margin
             bar_w = usable_w / len(self.amps)
             cap_w = max(bar_w * 0.40, 2)
             bloom_pad = 1.0
@@ -57,12 +68,12 @@ class _PillView(NSView):
             for i, amp in enumerate(self.amps):
                 delay = abs(i - center_idx) / center_idx * 0.3
                 t = max(min((self._transition_t - delay) / (1.0 - delay), 1.0), 0.0)
-                bar_h = max(amp * h * 0.58 * t, 3.0 * t)
-                x = margin + i * bar_w + (bar_w - cap_w) / 2
-                y = (h - bar_h) / 2
+                bar_h = max(amp * inner_h * 0.58 * t, 3.0 * t)
+                x = p + margin + i * bar_w + (bar_w - cap_w) / 2
+                y = p + (inner_h - bar_h) / 2
                 r = cap_w / 2
                 a = EDGE_ALPHA[i]
-                NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, a * 0.15).setFill()
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, a * 0.25).setFill()
                 NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
                     ((x - bloom_pad, y - bloom_pad),
                      (cap_w + bloom_pad * 2, bar_h + bloom_pad * 2)),
@@ -81,6 +92,7 @@ IDLE_W, IDLE_H = 32, 12
 ACTIVE_W, ACTIVE_H = 65, 25
 HUD_Y = 85
 NUM_BARS = 9
+RING_PAD = 1.5
 
 def _make_bell(n):
     center = (n - 1) / 2
@@ -153,11 +165,13 @@ class WaveformHUD(NSObject):
         self._view.amps = [0.0] * NUM_BARS
         self._view._transition_t = 0.0
         scr = NSScreen.mainScreen().frame()
-        w, h = ACTIVE_W, ACTIVE_H
+        win_w = ACTIVE_W + RING_PAD * 2
+        win_h = ACTIVE_H + RING_PAD * 2
 
         self._win.setAlphaValue_(0.4)
         self._win.setFrame_display_animate_(
-            (((scr.size.width - w) / 2, HUD_Y), (w, h)), True, True
+            (((scr.size.width - win_w) / 2, HUD_Y - RING_PAD), (win_w, win_h)),
+            True, True
         )
         self._win.setAlphaValue_(1.0)
         self._win.orderFront_(None)
@@ -195,7 +209,7 @@ class WaveformHUD(NSObject):
     def tick_(self, timer):
         if self._view._transition_t < 1.0:
             self._view._transition_t = min(self._view._transition_t + 0.08, 1.0)
-        self._phase += 0.36
+        self._phase += 0.32
 
         rms = 0.0
         while not self._queue.empty():
@@ -205,7 +219,7 @@ class WaveformHUD(NSObject):
 
         for i in range(NUM_BARS):
             wave = 0.5 + 0.5 * math.sin(self._phase - i * 0.7)
-            idle_pulse = wave * 0.30
+            idle_pulse = wave * 0.31
 
             jitter = 0.7 + random.random() * 0.6
             voice = rms * BELL[i] * jitter
@@ -354,10 +368,6 @@ class HeyListen(rumps.App):
         time.sleep(2)
         self.title = "HeyListen"
         
-
-
-
-
 
 if __name__ == "__main__":
     hl_application = HeyListen()
