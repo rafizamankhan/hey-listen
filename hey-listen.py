@@ -287,7 +287,16 @@ class WhisperTranscriber:
             audio,
             fp16=False,
             language='en',
-            task="transcribe"
+            temperature = 0,
+            condition_on_previous_text = False,
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            '''
+            verbose = False,
+            hallucination_silence_threshold=True,
+            
+            '''
+
         )
         return result["text"].strip()
 
