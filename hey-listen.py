@@ -17,7 +17,7 @@ from Foundation import NSObject, NSTimer
 
 #configuration 
 sample_rate = 16000
-model_size = "base"
+model_size = "small"
 HOTKEY = {keyboard.Key.alt_l}
 
 #overlay 
@@ -291,13 +291,14 @@ class WhisperTranscriber:
             condition_on_previous_text = False,
             no_speech_threshold=0.6,
             compression_ratio_threshold=2.4,
-            '''
+            task='transcribe'
+        )
+
+        '''
             verbose = False,
             hallucination_silence_threshold=True,
             
-            '''
-
-        )
+        '''
         return result["text"].strip()
 
 #application
