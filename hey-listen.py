@@ -41,10 +41,10 @@ APP_MODE_MAP = {
 }
 
 #Signal
-ESSAY_SIGNALS = ["essay", "thesis", "argument", "paragraph", "introduction", "conclusion", "report", "paper", "write about", "main point", "claim"]
-BULLET_SIGNALS = ["bullet", "bullets", "list", "notes", "key points", "summarize", "action items", "to do", "todo", "tasks", "points", "breakdown"]
-EMAIL_SIGNALS = ["email", "write to", "send to", "reply", "dear", "subject line", "regards"]
-MESSAGE_SIGNALS = ["text", "message", "slack", "dm", "respond", "comments"]
+essay_signals = ["essay", "thesis", "argument", "paragraph", "introduction", "conclusion", "report", "paper", "write about", "main point", "claim"]
+bullet_signals = ["bullet", "bullets", "list", "notes", "key points", "summarize", "action items", "to do", "todo", "tasks", "points", "breakdown"]
+email_signals = ["email", "write to", "send to", "reply", "dear", "subject line", "regards"]
+message_signals = ["text", "message", "slack", "dm", "respond", "comments"]
 
 #Find Active Application
 def get_active_app() -> str:
@@ -56,6 +56,16 @@ def get_active_app() -> str:
         return "Unknown"
 
 #Detect Application Mode
+def detect_mode(transcript: str) -> str:
+    t = transcript.lower()
+
+    if any (w in t for w in bullet_signals): return "bullets"
+    if any (w in t for w in essay_signals): return "essay"
+    if any (w in t for w in email_signals): return "email"
+    if any (w in t for w in message_signals): return "message"
+
+    app = get_active_app()
+    return APP_MODE_MAP.get(app, "clean")
 
 
 #overlay 
