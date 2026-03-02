@@ -40,14 +40,20 @@ APP_MODE_MAP = {
     "Messages"              "message"
 }
 
-#Signal Section
+#Signal
 ESSAY_SIGNALS = ["essay", "thesis", "argument", "paragraph", "introduction", "conclusion", "report", "paper", "write about", "main point", "claim"]
 BULLET_SIGNALS = ["bullet", "bullets", "list", "notes", "key points", "summarize", "action items", "to do", "todo", "tasks", "points", "breakdown"]
 EMAIL_SIGNALS = ["email", "write to", "send to", "reply", "dear", "subject line", "regards"]
 MESSAGE_SIGNALS = ["text", "message", "slack", "dm", "respond", "comments"]
 
 #Find Active Application
-
+def get_active_app() -> str:
+    try:
+        script = 'tell application "System Events" to get name of first process whose frontmost is true'
+        r = subprocess.run(['osascript', 'e', script], capture_output=True, text=True)
+        return r.stdout.strip()
+    except Exception:
+        return "Unknown"
 
 #Detect Application Mode
 
