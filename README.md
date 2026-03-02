@@ -17,7 +17,7 @@ Built as a FOSS alternative to tools like Wispr Flow.
 - [x] Core dictation logic
 - [x] Global hotkey trigger
 - [x] Auto-paste into active app
-- [ ] Waveform HUD
+- [x] Waveform HUD
 - [ ] App packaging (.app bundle)
 - [ ] Windows support
 - [ ] Function key support
