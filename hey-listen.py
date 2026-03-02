@@ -10,6 +10,7 @@ import sounddevice as sd
 import whisper 
 import rumps 
 import pyperclip 
+import httpx
 from pynput import keyboard
 from AppKit import (NSWindow, NSView, NSColor, NSBezierPath, NSScreen,
                     NSFloatingWindowLevel, NSBackingStoreBuffered)
@@ -19,6 +20,26 @@ from Foundation import NSObject, NSTimer
 sample_rate = 16000
 model_size = "small"
 HOTKEY = {keyboard.Key.alt_l}
+
+# ollama_url = "http://localhost:11434/api/generate"
+# ollama_model = "phi3.5"
+
+APP_MODE_MAP = {
+    "Google Docs":          "essay"
+    "Microsoft Word":       "essay"
+    "Pages":                "essay"
+    "TextEdit":             "essay"
+    "Notion":               "bullets"
+    "Obsidian":             "bullets"
+    "Bear":                 "bullets"
+    "Mail":                 "email"
+    "Microsoft Outlook":    "email"
+    "Gmail":                "email"
+    "Slack":                "message"
+    "WhatsApp"              "message"
+    "Messages"              "message"
+
+}
 
 #overlay 
 class _OverlayWindow(NSWindow):
