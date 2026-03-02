@@ -25,19 +25,20 @@ HOTKEY = {keyboard.Key.alt_l}
 # ollama_model = "phi3.5"
 
 APP_MODE_MAP = {
-    "Google Docs":          "essay"
-    "Microsoft Word":       "essay"
-    "Pages":                "essay"
-    "TextEdit":             "essay"
-    "Notion":               "bullets"
-    "Obsidian":             "bullets"
-    "Bear":                 "bullets"
-    "Mail":                 "email"
-    "Microsoft Outlook":    "email"
-    "Gmail":                "email"
-    "Slack":                "message"
-    "WhatsApp"              "message"
-    "Messages"              "message"
+    "Google Docs":          "essay",
+    "Microsoft Word":       "essay",
+    "Pages":                "essay",
+    "TextEdit":             "essay",
+    "Notion":               "bullets",
+    "Obsidian":             "bullets",
+    "Bear":                 "bullets",
+    "Notes":                "bullets",
+    "Mail":                 "email",            
+    "Microsoft Outlook":    "email",
+    "Gmail":                "email",
+    "Slack":                "message",
+    "WhatsApp":              "message",
+    "Messages":              "message"
 }
 
 #Signal
@@ -67,6 +68,7 @@ def detect_mode(transcript: str) -> str:
     app = get_active_app()
     return APP_MODE_MAP.get(app, "clean")
 
+#Prompts for LLM (Phi3.5)
 
 #overlay 
 class _OverlayWindow(NSWindow):
@@ -349,6 +351,9 @@ class WhisperTranscriber:
         '''
         return result["text"].strip()
 
+#voice activity detection
+
+
 #application
 class HeyListen(rumps.App):
 
@@ -360,6 +365,9 @@ class HeyListen(rumps.App):
         self.hud.setup()
         self.pressed_keys = set()
         self.is_recording = False
+        self._press_time = 0
+        self._last_tap_time = 0
+        self._locked = False
 
         self.listener = keyboard.Listener(
             on_press = self._on_press,
@@ -377,16 +385,48 @@ class HeyListen(rumps.App):
     def _on_press(self, key):
         try:
             self.pressed_keys.add(self._normalize_key(key))
-            if HOTKEY.issubset(self.pressed_keys) and not self.is_recording:
+            
+            if not HOTKEY.issubset(self.pressed_keys):
+                return
+
+            self._press_time = time.time()
+
+            if self._locked and self.is_recording:
+                self._stop_and_transcribe()
+                self._locked = False
+                return
+            
+            if not self.is_recording:
                 self._start_recording()
+
         except Exception as e:
             print(f"Key press error: {e}")
 
     def _on_release(self, key):
         try:
             self.pressed_keys.discard(self._normalize_key(key))
-            if self.is_recording and not HOTKEY.issubset(self.pressed_keys):
-                self._stop_and_transcribe()
+
+            if self._locked: 
+                return
+
+            if not self.is_recording:
+                return
+            
+            held = time.time() - self._press_time
+
+            if held < 0.25:
+                now = time.time()
+                if now - self._last_tap_time < 0.4:
+                    self._locked = True
+                    self._last_tap_time = 0
+                    return
+                else:
+                    self._last_tap_time = now
+                    self._stop_and_transcribe()
+            else:
+                if not HOTKEY.issubset(self.pressed_keys):
+                    self._stop_and_transcribe()
+
         except Exception as e:
             print(f"Key release error: {e}")
 
