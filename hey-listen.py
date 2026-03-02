@@ -38,8 +38,19 @@ APP_MODE_MAP = {
     "Slack":                "message"
     "WhatsApp"              "message"
     "Messages"              "message"
-
 }
+
+#Signal Section
+ESSAY_SIGNALS = ["essay", "thesis", "argument", "paragraph", "introduction", "conclusion", "report", "paper", "write about", "main point", "claim"]
+BULLET_SIGNALS = ["bullet", "bullets", "list", "notes", "key points", "summarize", "action items", "to do", "todo", "tasks", "points", "breakdown"]
+EMAIL_SIGNALS = ["email", "write to", "send to", "reply", "dear", "subject line", "regards"]
+MESSAGE_SIGNALS = ["text", "message", "slack", "dm", "respond", "comments"]
+
+#Find Active Application
+
+
+#Detect Application Mode
+
 
 #overlay 
 class _OverlayWindow(NSWindow):
