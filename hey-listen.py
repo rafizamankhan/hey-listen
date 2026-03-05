@@ -69,6 +69,59 @@ def detect_mode(transcript: str) -> str:
     return APP_MODE_MAP.get(app, "clean")
 
 #Prompts for LLM (Phi3.5)
+PROMPTS = {
+        "essay": """You are an academic writing assistant. The user spoke their thoughts out loud.
+    Transform the transcript into a structured essay outline with:
+    - A clear thesis statement
+    - 2-3 numbered main points with brief supporting points
+    - One sentence closing thought
+
+    Be concise. Use the user's own words and ideas. Do not add information they did not mention.
+
+    Transcript: {transcript}
+
+    Output only the structured outline. No preamble.""",
+
+        "bullets": """You are a note taking assistant. The user spoke their thoughts out loud.
+    Transform the transcript into clean bullet points:
+    - Group related ideas together
+    - Use short, clear phrases 
+    - Maximum 8 bullets 
+
+    Transcript: {transcript}
+
+    Output only the structured outline. No preamble.""",
+
+        "email": """You are an email writing assistant. The user spoke their thoughts out loud. 
+    Transform the transcript into a professional email with:
+    - Subject: [subject line]
+    - A clear opening line
+    - 1-2 concise body paragraphs
+    - A professional sign-off
+
+    Transcript: {transcript}
+
+    Output only the structured outline. No preamble.""",
+
+        "message": """You are a messaging assistant. The user spoke their thoughts out loud. 
+    Transform the transcript into a natural, conversational message.
+    Remove filler words. Keep the tone friendly and direct.
+    Keep it to 2-3 sentences maximum. 
+
+    Transcript: {transcript}
+
+    Output only the structured outline. No preamble.""",
+
+        "clean": """You are transcription cleaner. The user spoke out their thoughts our loud. 
+    Clean up the transcript by:
+    - Removing filler words like um, uh, like, you know 
+    - Fixing run-on sentences
+    - Keeping all original ideas and wording
+
+    Transcript: {transcript}
+
+    Output only the cleaned text. No preamble.""",
+}
 
 #overlay 
 class _OverlayWindow(NSWindow):
