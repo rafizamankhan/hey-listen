@@ -18,11 +18,8 @@ from Foundation import NSObject, NSTimer
 
 #configuration 
 sample_rate = 16000
-model_size = "small"
+model_size = "base"
 HOTKEY = {keyboard.Key.alt_l}
-
-# ollama_url = "http://localhost:11434/api/generate"
-# ollama_model = "phi3.5"
 
 APP_MODE_MAP = {
     "Google Docs":          "essay",
@@ -51,7 +48,7 @@ message_signals = ["text", "message", "slack", "dm", "respond", "comments"]
 def get_active_app() -> str:
     try:
         script = 'tell application "System Events" to get name of first process whose frontmost is true'
-        r = subprocess.run(['osascript', 'e', script], capture_output=True, text=True)
+        r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
         return r.stdout.strip()
     except Exception:
         return "Unknown"
@@ -85,8 +82,10 @@ PROMPTS = {
         "bullets": """You are a note taking assistant. The user spoke their thoughts out loud.
     Transform the transcript into clean bullet points:
     - Group related ideas together
-    - Use short, clear phrases 
-    - Maximum 8 bullets 
+    - Use short, clear phrases
+    - Only include bullet points that are related to the transcript 
+    - Do not repeat ideas and keep bullet points to minimum 
+    - Maximum 8 bullets per group (Does not mean you need to keep reiterating current points to fill it up to 8 points)
 
     Transcript: {transcript}
 
@@ -122,6 +121,62 @@ PROMPTS = {
 
     Output only the cleaned text. No preamble.""",
 }
+
+# phi3.5 intelligence layer
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "phi3.5:latest"
+
+_session_context: list[str] = []
+
+def listen_with_phi(transcript: str, mode: str) -> str:
+    """Send transcript to local Phi3.5 via Ollama. Falls back to raw transcript. """
+    global _session_context 
+
+    #Context prefix for essay mode
+    context_prefix = ""
+    if mode == "essay" and _session_context:
+        context_prefix = "Previous notes in this session:\n"
+        context_prefix += "\n---\n".join(_session_context[-3:])
+        context_prefix += "\n\nNew transcript to structure:\n"
+
+    prompt = PROMPTS[mode].format(
+        transcript = context_prefix + transcript
+    )
+
+    try:
+        response = httpx.post (
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0,
+                    "num_predict": 400,
+                }
+            },
+            timeout=30.0
+        )
+        response.raise_for_status()
+        result = response.json()["response"].strip()
+
+        #context memory
+        _session_context.append(transcript)
+        if len(_session_context) > 10: 
+            _session_context.pop(0)
+        return result
+
+    except httpx.ConnectError:
+        print("Ollama not running - falling back to raw transcript")
+        return transcript
+    except Exception  as e:
+        print(f"Phi3.5 error: {e} - falling back to raw transcript")
+        return transcript
+
+def clear_session():
+    global _session_context
+    _session_context = []
+    print("Session cleared.")
 
 #overlay 
 class _OverlayWindow(NSWindow):
@@ -428,6 +483,10 @@ class HeyListen(rumps.App):
         )
         self.listener.start()
         self.title = "HeyListen"
+        self.menu = [
+            rumps.MenuItem("Clear Session", callback = self._clear_session),
+            None,
+        ]
 
     #Hotkey Logic
     def _normalize_key(self, key):
@@ -504,14 +563,19 @@ class HeyListen(rumps.App):
         text = self.transcriber.transcribe(audio)
 
         if text:
+            mode = detect_mode(text)
+            print(f"Mode detected: {mode}")
+            self.title = "Thinking..."
+            listen_special = listen_with_phi(text, mode)
 
-            text = " " + text
-            pyperclip.copy(text)
+            output = " " + listen_special
+            pyperclip.copy(output)
 
             script = 'tell application "System Events" to keystroke "v" using command down'
             subprocess.run(["osascript", "-e", script])
 
             print(f"Transcribed: {text}")
+            print(f"Structured ({mode}): {listen_special}")
             self.title = "Success"
 
         else:
@@ -520,7 +584,11 @@ class HeyListen(rumps.App):
 
         time.sleep(2)
         self.title = "HeyListen"
-        
+
+    def _clear_session(self, _):
+        clear_session()
+        print(f"Listen", "Session cleared", "Starting fresh context.")
+
 #main
 if __name__ == "__main__":
     hl_application = HeyListen()
