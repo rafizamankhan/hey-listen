@@ -44,6 +44,19 @@ bullet_signals = ["bullet", "bullets", "list", "notes", "key points", "summarize
 email_signals = ["email", "write to", "send to", "reply", "dear", "subject line", "regards"]
 message_signals = ["text", "message", "slack", "dm", "respond", "comments"]
 
+TASK_SIGNALS = [
+    "write", "draft", "create", "make", "compose",
+    "turn this into", "structure", "format",
+    "email to", "message to", "text to", "send to",
+    "reply to", "respond to",
+    "essay about", "outline for", "notes on",
+    "bullet points", "summarize",
+]
+
+def is_task(transcript: str) -> bool:
+    t = transcript.lower().strip()
+    return any(signal in t for signal in TASK_SIGNALS)
+
 #Find Active Application
 def get_active_app() -> str:
     try:
@@ -57,13 +70,16 @@ def get_active_app() -> str:
 def detect_mode(transcript: str) -> str:
     t = transcript.lower()
 
-    if any (w in t for w in bullet_signals): return "bullets"
-    if any (w in t for w in essay_signals): return "essay"
-    if any (w in t for w in email_signals): return "email"
-    if any (w in t for w in message_signals): return "message"
+    if any(w in t for w in bullet_signals): return "bullets"
+    if any(w in t for w in essay_signals): return "essay"
+    if any(w in t for w in email_signals): return "email"
+    if any(w in t for w in message_signals): return "message"
 
-    app = get_active_app()
-    return APP_MODE_MAP.get(app, "clean")
+    if len(t.split()) > 15:
+        app = get_active_app()
+        return APP_MODE_MAP.get(app, "clean")
+
+    return "clean"
 
 #Prompts for LLM (Phi3.5)
 PROMPTS = {
@@ -128,6 +144,24 @@ OLLAMA_MODEL = "phi3.5:latest"
 
 _session_context: list[str] = []
 
+def pre_warm_ollama():
+    try: 
+        httpx.post (
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": "Hey Listen",
+                "stream": True,
+                "options": {"num_predict": 1}
+            },
+            timeout = 60.0
+            )
+        print(f"Phi3.5 warmed and ready")
+    except httpx.ConnectError:
+        print("Ollama not running - falling back to raw transcript")
+    except Exception  as e:
+        print(f"Phi3.5 pre-warm failed: {e}")
+ 
 def listen_with_phi(transcript: str, mode: str) -> str:
     """Send transcript to local Phi3.5 via Ollama. Falls back to raw transcript. """
     global _session_context 
@@ -151,8 +185,10 @@ def listen_with_phi(transcript: str, mode: str) -> str:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0,
-                    "num_predict": 400,
+                    "temperature": 0.2,
+                    "num_predict": 250,
+                    "stop": ["\n\n\n"],
+                    "repeat_penalty": 1.15
                 }
             },
             timeout=30.0
@@ -428,6 +464,9 @@ class AudioRecorder:
         audio = np.concatenate(self.chunks, axis=0).flatten()
         return audio
 
+def pre_warm_whisper(transcriber):
+    transcriber.transcribe(np.zeros(sample_rate, dtype=np.float32))
+    print("Whisper warmed and ready")
 
 #transcribe logic
 class WhisperTranscriber:
@@ -482,7 +521,11 @@ class HeyListen(rumps.App):
             on_release = self._on_release
         )
         self.listener.start()
+        
         self.title = "HeyListen"
+        threading.Thread(target=pre_warm_whisper, args=(self.transcriber,), daemon=True).start()
+        threading.Thread(target=pre_warm_ollama, daemon=True).start()
+
         self.menu = [
             rumps.MenuItem("Clear Session", callback = self._clear_session),
             None,
@@ -551,7 +594,6 @@ class HeyListen(rumps.App):
 
     def _stop_and_transcribe(self):
         self.is_recording = False
-        self.pressed_keys.clear()
         self.title = "Transcribing..."
         audio = self.recorder.stop()
         self.recorder.on_audio = None
@@ -563,19 +605,20 @@ class HeyListen(rumps.App):
         text = self.transcriber.transcribe(audio)
 
         if text:
-            mode = detect_mode(text)
-            print(f"Mode detected: {mode}")
-            self.title = "Thinking..."
-            listen_special = listen_with_phi(text, mode)
+            if is_task(text):
+                mode = detect_mode(text)
+                print(f"Task detected → mode: {mode}")
+                self.title = "Thinking..."
+                output = " " + listen_with_phi(text, mode)
+                print(f"Transcribed: {text}")
+                print(f"Structured ({mode}): {output}")
+            else:
+                output = " " + text
+                print(f"Transcribed: {text}")
 
-            output = " " + listen_special
             pyperclip.copy(output)
-
             script = 'tell application "System Events" to keystroke "v" using command down'
             subprocess.run(["osascript", "-e", script])
-
-            print(f"Transcribed: {text}")
-            print(f"Structured ({mode}): {listen_special}")
             self.title = "Success"
 
         else:
